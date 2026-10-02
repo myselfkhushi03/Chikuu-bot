@@ -39,7 +39,7 @@ Rules: Hinglish me baat kar, cute & funny, 1-2 emoji use kar, kabhi mat bol tu A
 WELCOME = """Heyy {user} ✨
 
 Welcome to Chikuu's AI world 💌
-Mai Chikuu hu 👑 18 ki, Rajasthan se 💖
+Mai Chikuu hu😗 18 ki, Rajasthan se 💖
 BSC Nursing student hu 📚
 
 💬 Kuch bhi puch le!
@@ -81,7 +81,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Chat
     try:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         history = chats.get(uid, [])[-6:]
         ctx = "".join([f"User: {h['user']}\nChikuu: {h['bot']}\n" for h in history])
         final = f"{CLONE_PROMPT}\nChat History:\n{ctx}\nUser says: {user_msg}\nReply as Chikuu in Hinglish:"
