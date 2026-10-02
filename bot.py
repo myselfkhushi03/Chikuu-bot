@@ -81,7 +81,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Chat
     try:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        model = genai.GenerativeModel("gemini-2.0-flash")
         history = chats.get(uid, [])[-6:]
         ctx = "".join([f"User: {h['user']}\nChikuu: {h['bot']}\n" for h in history])
         final = f"{CLONE_PROMPT}\nChat History:\n{ctx}\nUser says: {user_msg}\nReply as Chikuu in Hinglish:"
