@@ -10,7 +10,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 8536757095  # Telegram Admin ID
-API_TEMPLATE = "https://vipjwt.chikuu.site/token?uid={uid}&password={pwd}"
+API_TEMPLATE = "https://vipjwt.ffbot.site/token?uid={uid}&password={pwd}"
 CONCURRENCY_LIMIT = 5  # Parallel requests limit
 
 # Keep-Alive Server
