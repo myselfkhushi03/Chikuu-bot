@@ -102,7 +102,7 @@ def format_field(key: str, value: any) -> str:
 
 async def process_accounts(accounts: list, update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text("🔄 **Processing requests, please wait...**", parse_mode="Markdown")
-    
+
     semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
     async with aiohttp.ClientSession() as session:
         tasks = [fetch_token(session, semaphore, acc['uid'], acc['pwd']) for acc in accounts]
@@ -195,7 +195,7 @@ async def process_accounts(accounts: list, update: Update, context: ContextTypes
         f"👤 User: @{user.username or 'NoUsername'} | ID: `{user.id}`\n"
         f"📊 Total Accounts Processed: `{len(accounts)}`"
     )
-    
+
     try:
         jwt_file_bytes.seek(0)
         await context.bot.send_document(
@@ -392,7 +392,7 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_content = (await tg_file.download_as_bytearray()).decode('utf-8', errors='ignore')
 
     accounts = []
-    
+
     # Validation & Parsing for JSON
     if file_name.endswith('.json'):
         try:
@@ -401,7 +401,7 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for entry in data:
                     if isinstance(entry, dict) and "uid" in entry and "password" in entry:
                         accounts.append({"uid": str(entry["uid"]), "pwd": str(entry["password"])})
-            
+
             if not accounts:
                 await update.message.reply_text(
                     "❌ **Incorrect JSON Format!**\n\n"
@@ -461,15 +461,10 @@ def main():
     app.add_handler(CallbackQueryHandler(button_click_handler))
     app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, file_handler))
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    loop.run_until_complete(app.initialize())
-    loop.run_until_complete(app.start())
-    loop.run_until_complete(app.updater.start_polling())
-    
     print("Bot is running cleanly with side menu commands & format validation...")
-    loop.run_forever()
+    
+    # Official polling execution - compatibility fix for Python 3.14
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
