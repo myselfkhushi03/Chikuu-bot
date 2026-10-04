@@ -19,6 +19,9 @@ ADMIN_ID = 8536757095  # Telegram Admin ID
 API_TEMPLATE = "https://vipjwt.ffbot.site/token?uid={uid}&password={pwd}"
 CONCURRENCY_LIMIT = 5
 
+# Sample direct Anime MP4 video link (VIP Shop ke liye)
+VIP_ANIME_VIDEO_URL = "https://cdn.pixabay.com/video/2022/10/05/133647-758252277_large.mp4"
+
 # Flask Server for Keep-Alive
 flask_app = Flask(__name__)
 
@@ -36,35 +39,18 @@ Thread(target=run_flask, daemon=True).start()
 # ---------------- KEYBOARDS SETUP ---------------- #
 
 def get_main_keyboard():
-    """ Main 6-Button Grid Menu """
+    """ 
+    Exact Custom Bottom Reply Keyboard
+    Row 1: Process File 📩 | 📝 Add Long Bio
+    Row 2: 🌀 Naruto Free Spinner | Vip Shop 🛒
+    Row 3: Help 🆘
+    Row 4: Owner 👨‍💻
+    """
     keyboard = [
-        [KeyboardButton("⚡ PROCESSED"), KeyboardButton("📁 PROCESS FILE")],
-        [KeyboardButton("📜 ADD LONG BIO"), KeyboardButton("👑 VIP SHOP")],
-        [KeyboardButton("🆘 HELP"), KeyboardButton("👨‍💻 OWNER")]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-
-def get_cancel_keyboard():
-    """ Only Cancel Button for direct options """
-    keyboard = [[KeyboardButton("❌ CANCEL")]]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-
-def get_help_menu_keyboard():
-    """ Main Help Sub-menu (Without Back Button) """
-    keyboard = [
-        [KeyboardButton("📌 Normal Commands")],
-        [KeyboardButton("❓ FAQ"), KeyboardButton("💡 Tips")],
-        [KeyboardButton("❌ CANCEL")]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-
-def get_help_detail_keyboard():
-    """ Help Details Menu (Shows Back to Help button AFTER tapping sub-option) """
-    keyboard = [
-        [KeyboardButton("🔙 BACK TO HELP"), KeyboardButton("❌ CANCEL")]
+        [KeyboardButton("Process File 📩"), KeyboardButton("📝 Add Long Bio")],
+        [KeyboardButton("🌀 Naruto Free Spinner"), KeyboardButton("Vip Shop 🛒")],
+        [KeyboardButton("Help 🆘")],
+        [KeyboardButton("Owner 👨‍💻")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -213,19 +199,35 @@ async def set_bot_commands(application: Application):
     """ Telegram Side Menu Commands """
     commands = [
         BotCommand("start", "Start Bot & Open Main Menu"),
+        BotCommand("help", "Open Complete Help Menu"),
         BotCommand("token", "Get Details: /token <UID> <PASSWORD>")
     ]
     await application.bot.set_my_commands(commands)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = (
-        "👋 Hi 💓💓💓!\n\n"
-        "🚀 **ᴊᴡᴛ ᴛᴏᴋᴇɴ ɢᴇɴᴇʀᴀᴛᴏʀ ʙᴏᴛ**\n\n"
-        "Send me a `.json` or `.txt` file with UID + Password pairs.\n"
-        "Or use single command: `/token <UID> <PASSWORD>`"
+    user_first_name = update.effective_user.first_name or "User"
+    
+    start_text = (
+        f"👏 Hi {user_first_name} 💕💕💕!\n\n"
+        "🚀 **JWT TOKEN GENERATOR BOT**\n\n"
+        "Send me a `.json` file with UID + Password pairs, like this:\n"
+        "```json\n"
+        "[\n"
+        '  {"uid": "your_uid", "password": "your_password"}\n'
+        "]\n"
+        "```\n\n"
+        "**What you'll get back:**\n"
+        "✅ A `token_<region>.json` file with your generated tokens\n"
+        "❌ Any accounts that failed are listed separately, so nothing gets lost\n\n"
+        "📎 Max file size: 5.0 MB\n\n"
+        "⭐ **VIP FEATURES**\n"
+        "• Auto Update – keeps your tokens fresh on GitHub automatically, on a schedule you set\n"
+        "• Use `/setautoupdate` to get started\n\n"
+        "Tap **Help 🆘** below anytime for the full command list."
     )
-    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_main_keyboard())
+    
+    await update.message.reply_text(start_text, parse_mode="Markdown", reply_markup=get_main_keyboard())
 
 
 async def token_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -244,12 +246,25 @@ async def token_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def text_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
-    if text == "⚡ PROCESSED":
-        await update.message.reply_text("🚧 **Processed feature coming soon!**", reply_markup=get_cancel_keyboard())
-
-    elif text == "📁 PROCESS FILE":
+    if text == "Process File 📩":
         msg = (
             "Okay, please send the JSON file now for manual processing.\n\n"
+            "Make sure it's a `.json` file containing a list like:\n"
+            "```json\n"
+            "[\n"
+            '  {"uid": "user1", "password": "pass1"},\n'
+            '  {"uid": "user2", "password": "pass2"}\n'
+            "]\n"
+            "```"
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_main_keyboard())
+
+    elif text == "📝 Add Long Bio":
+        msg = (
+            "```\n"
+            "ℹ️ ADD LONG BIO\n"
+            "```\n\n"
+            "Please send a JSON file containing UID and Password.\n\n"
             "Required Format:\n"
             "```json\n"
             "[\n"
@@ -258,46 +273,101 @@ async def text_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             "]\n"
             "```"
         )
-        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_cancel_keyboard())
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_main_keyboard())
 
-    elif text == "📜 ADD LONG BIO":
+    elif text == "🌀 Naruto Free Spinner":
         msg = (
-            "╭────────────────────╮\n"
-            "│  ℹ️  ᴀᴅᴅ ʟᴏɴɢ ʙɪᴏ\n"
-            "╰────────────────────╯\n\n"
-            "Please send a JSON file containing UID and Password."
+            "```\n"
+            "ℹ️ NARUTO FREE SPINNER\n"
+            "```\n\n"
+            "🌀 **Naruto Free Spinner** – Ready!\n\n"
+            "Send a JSON file with UID + Password to spin.\n\n"
+            "Required Format:\n"
+            "```json\n"
+            "[\n"
+            '  {"uid": "12345", "password": "abc123"},\n'
+            '  {"uid": "67890", "password": "xyz789"}\n'
+            "]\n"
+            "```\n"
+            "✅ JWT auto-generate hoga ➔ Region detect hoga ➔ Spin chalega!"
         )
-        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_cancel_keyboard())
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_main_keyboard())
 
-    elif text == "👑 VIP SHOP":
-        await update.message.reply_text("👑 **VIP SHOP Plans & Pricing coming soon!**", reply_markup=get_cancel_keyboard())
-
-    elif text == "👨‍💻 OWNER":
-        await update.message.reply_text("👨‍💻 **Owner Contact:** @myselfkhushi03", reply_markup=get_cancel_keyboard())
-
-    elif text in ["🆘 HELP", "🔙 BACK TO HELP"]:
-        help_text = "🆘 **ʜᴇʟᴘ ᴄᴇɴᴛᴇʀ**\n\nSelect a category below to get help:"
-        await update.message.reply_text(help_text, parse_mode="Markdown", reply_markup=get_help_menu_keyboard())
-
-    elif text == "📌 Normal Commands":
-        msg = (
-            "📌 **𝗡𝗢𝗥𝗠𝗔𝗟 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦**\n\n"
-            "➤ `/start` - Start Bot & Main Menu\n"
-            "➤ `/token <UID> <PWD>` - Direct Account Info\n"
-            "➤ Send `.json` or `.txt` file - Process Bulk Accounts"
+    elif text == "Vip Shop 🛒":
+        vip_caption = (
+            "```\n"
+            "✨ VIP SHOP ✨\n"
+            "```\n"
+            "See Video For Vip Pro Features\n\n"
+            "✨ **ZEXXY JWT GENERATOR – VIP MEMBERSHIP** ✨\n\n"
+            "🚀 Unlock **Premium Features** Instantly!\n"
+            "⚡ Automatic GitHub Uploads\n"
+            "⚡ Scheduled File Processing\n"
+            "⚡ Auto JWT & Token Management\n"
+            "⚡ Premium VIP Features\n\n"
+            "💼 **AVAILABLE PLANS & PRICES:**\n"
+            "🗓️️ 7 Days – ₹ 39\n"
+            "🗓️ 15 Days – ₹ 69\n"
+            "📆 1 Month – ₹ 99\n"
+            "📆 2 Months – ₹ 159\n"
+            "📆 3 Months – ₹ 219\n"
+            "🎯 1 Year – ₹ 499 🔥\n\n"
+            "🏆 **BEST VALUE:** 1 Year VIP – Only ₹499\n\n"
+            "📩 **TO PURCHASE VIP MEMBERSHIP:**\n"
+            "👤 Contact Admin 👉 @myselfkhushi03"
         )
-        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_help_detail_keyboard())
+        try:
+            await update.message.reply_video(
+                video=VIP_ANIME_VIDEO_URL,
+                caption=vip_caption,
+                parse_mode="Markdown",
+                reply_markup=get_main_keyboard()
+            )
+        except Exception:
+            await update.message.reply_text(vip_caption, parse_mode="Markdown", reply_markup=get_main_keyboard())
 
-    elif text == "❓ FAQ":
-        msg = "❓ **𝗙𝗔𝗤**\n\nQ: File format sahi nahi ho toh?\nA: Bot parsing cancel kar dega aur error dikhayega."
-        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_help_detail_keyboard())
+    elif text == "Help 🆘" or text == "/help":
+        help_text = (
+            "```\n"
+            "📌 NORMAL COMMANDS\n"
+            "```\n\n"
+            "➤ `/start`\n"
+            "  └➤ **Use:** Bot ka Welcome Message aur Main Menu open karein.\n\n"
+            "➤ `/help`\n"
+            "  └➤ **Use:** Complete Help Menu open karein.\n\n"
+            "➤ **Process File**\n"
+            "  └➤ **Use:** Send a `.json` file with UID + Password list to process accounts and generate JWT Tokens.\n"
+            "  └➤ **Format:** `[{\"uid\":\"123\", \"password\":\"abc\"}]`\n\n"
+            "➤ **Add Long Bio**\n"
+            "  └➤ **Use:** Send UID + Password JSON, then send your Bio text – all accounts will have their Bio updated.\n\n"
+            "➤ **Naruto Free Spinner**\n"
+            "  └➤ **Use:** Send UID + Password JSON – JWT auto-generate hoga, region detect hoga aur Naruto Event spin chalega.\n\n"
+            "```\n"
+            "❓ FAQ\n"
+            "```\n\n"
+            "❓ **Auto Update kaam nahi kar raha?**\n"
+            "  └➤ Check `/autoupdatelist`. If status is Paused, use `/resumeautoupdate`. If VIP has expired, please renew your VIP.\n\n"
+            "❓ **Owner Panel ya VIP Menu nahi dikh raha?**\n"
+            "  └➤ Send `/start` or `/help` again. The menu will refresh automatically.\n\n"
+            "❓ **Setup me koi Problem aa rahi hai?**\n"
+            "  └➤ Use `/cancel` to stop the current process and restart the setup.\n\n"
+            "```\n"
+            "💡 TIPS\n"
+            "```\n\n"
+            "• **Fast Processing:** Process all accounts in parallel – 30 concurrent workers.\n"
+            "• **Multiple Auto Updates:** Create multiple Auto Updates for different Repos/Files.\n"
+            "• **Quick Cancel:** Use `/cancel` at any setup step to immediately stop the current process."
+        )
+        await update.message.reply_text(help_text, parse_mode="Markdown", reply_markup=get_main_keyboard())
 
-    elif text == "💡 Tips":
-        msg = "💡 **𝗧𝗜𝗣𝗦**\n\n• Processing speed ke liye multiple accounts file format me bhejein."
-        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_help_detail_keyboard())
-
-    elif text == "❌ CANCEL":
-        await update.message.reply_text("🏠 **Returned to Main Menu.**", reply_markup=get_main_keyboard())
+    elif text == "Owner 👨‍💻":
+        owner_msg = (
+            "👨‍‍💻 **Owner Details:**\n\n"
+            "👤 **Username:** @myselfkhushi03\n"
+            "💬 Click link below to open chat directly:\n"
+            "https://t.me/myselfkhushi03"
+        )
+        await update.message.reply_text(owner_msg, parse_mode="Markdown", reply_markup=get_main_keyboard())
 
 
 async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -316,7 +386,7 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     file_name = document.file_name.lower()
     if not (file_name.endswith('.txt') or file_name.endswith('.json')):
-        await update.message.reply_text("⚠️️ Kripya `.txt` ya `.json` file hi bhejein.", reply_markup=get_main_keyboard())
+        await update.message.reply_text("⚠ Kripya `.txt` ya `.json` file hi bhejein.", reply_markup=get_main_keyboard())
         return
 
     tg_file = await context.bot.get_file(document.file_id)
@@ -365,11 +435,12 @@ def main():
     app.post_init = set_bot_commands
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", text_button_handler))
     app.add_handler(CommandHandler("token", token_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_button_handler))
     app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, file_handler))
 
-    print("Bot is running cleanly with bottom grid keyboard & proper back flow...")
+    print("Bot is successfully running with exact UI layout and Anime VIP video...")
     app.run_polling(drop_pending_updates=True)
 
 
