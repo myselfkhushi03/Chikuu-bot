@@ -5,12 +5,11 @@ import asyncio
 import aiohttp
 from threading import Thread
 from flask import Flask
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
-    CallbackQueryHandler,
     filters,
     ContextTypes
 )
@@ -34,51 +33,43 @@ def run_flask():
 Thread(target=run_flask, daemon=True).start()
 
 
+# ---------------- KEYBOARDS SETUP ---------------- #
+
 def get_main_keyboard():
-    """ Main Chat Inline Keyboard """
+    """ Main 6-Button Grid Menu """
     keyboard = [
-        [
-            InlineKeyboardButton("⚡ PROCESD", callback_data="btn_processed"),
-            InlineKeyboardButton("📁 PROCESS FILE", callback_data="btn_process_file")
-        ],
-        [
-            InlineKeyboardButton("📜 LONG BIO", callback_data="btn_long_bio"),
-            InlineKeyboardButton("👑 VIP SHOP", callback_data="btn_vip_shop")
-        ],
-        [
-            InlineKeyboardButton("🆘 HELP", callback_data="btn_help")
-        ],
-        [
-            InlineKeyboardButton("👨‍‍💻 OWNER", url="https://t.me/myselfkhushi03")
-        ]
+        [KeyboardButton("⚡ PROCESSED"), KeyboardButton("📁 PROCESS FILE")],
+        [KeyboardButton("📜 ADD LONG BIO"), KeyboardButton("👑 VIP SHOP")],
+        [KeyboardButton("🆘 HELP"), KeyboardButton("👨‍💻 OWNER")]
     ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_help_keyboard():
-    """ Help Menu Buttons """
-    keyboard = [
-        [InlineKeyboardButton("📌 Normal Commands", callback_data="help_normal")],
-        [InlineKeyboardButton("❓ FAQ", callback_data="help_faq")],
-        [InlineKeyboardButton("💡 Tips", callback_data="help_tips")],
-        [
-            InlineKeyboardButton("🔙 BACK", callback_data="help_cancel"),
-            InlineKeyboardButton("❌ CANCEL", callback_data="help_cancel")
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
 def get_cancel_keyboard():
-    """ Navigation buttons for sub-sections """
-    keyboard = [
-        [
-            InlineKeyboardButton("🔙 BACK TO HELP", callback_data="btn_help"),
-            InlineKeyboardButton("❌ CANCEL", callback_data="help_cancel")
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    """ Only Cancel Button for direct options """
+    keyboard = [[KeyboardButton("❌ CANCEL")]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+
+def get_help_menu_keyboard():
+    """ Main Help Sub-menu (Without Back Button) """
+    keyboard = [
+        [KeyboardButton("📌 Normal Commands")],
+        [KeyboardButton("❓ FAQ"), KeyboardButton("💡 Tips")],
+        [KeyboardButton("❌ CANCEL")]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+def get_help_detail_keyboard():
+    """ Help Details Menu (Shows Back to Help button AFTER tapping sub-option) """
+    keyboard = [
+        [KeyboardButton("🔙 BACK TO HELP"), KeyboardButton("❌ CANCEL")]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+# ---------------- API & FILE PROCESSING ---------------- #
 
 async def fetch_token(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, uid: str, pwd: str) -> dict:
     async with semaphore:
@@ -168,11 +159,10 @@ async def process_accounts(accounts: list, update: Update, context: ContextTypes
             formatted_text_blocks.append(block)
             full_log_lines.append(block)
 
-    # 1. Show complete account details in text reply
+    # Output Responses
     if len(accounts) == 1:
         await update.message.reply_text(formatted_text_blocks[0], parse_mode="Markdown", reply_markup=get_main_keyboard())
 
-    # 2. Prepare output file
     jwt_file_content = "\n".join(jwt_only_lines) if jwt_only_lines else "No valid JWT tokens generated."
     jwt_file_bytes = io.BytesIO(jwt_file_content.encode('utf-8'))
     jwt_file_bytes.name = "jwt_tokens.txt"
@@ -188,7 +178,7 @@ async def process_accounts(accounts: list, update: Update, context: ContextTypes
         reply_markup=get_main_keyboard()
     )
 
-    # 3. Log to Admin
+    # Admin Logging
     user = update.effective_user
     log_caption = (
         f"📁 **New Request Logged**\n"
@@ -217,8 +207,10 @@ async def process_accounts(accounts: list, update: Update, context: ContextTypes
     await status_msg.delete()
 
 
+# ---------------- COMMANDS & HANDLERS ---------------- #
+
 async def set_bot_commands(application: Application):
-    """ Sets the Telegram side menu commands """
+    """ Telegram Side Menu Commands """
     commands = [
         BotCommand("start", "Start Bot & Open Main Menu"),
         BotCommand("token", "Get Details: /token <UID> <PASSWORD>")
@@ -230,126 +222,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "👋 Hi 💓💓💓!\n\n"
         "🚀 **ᴊᴡᴛ ᴛᴏᴋᴇɴ ɢᴇɴᴇʀᴀᴛᴏʀ ʙᴏᴛ**\n\n"
-        "Send me a `.json` or `.txt` file with UID + Password pairs, like this:\n"
-        "```json\n"
-        "[\n"
-        '  {"uid": "your_uid", "password": "your_password"}\n'
-        "]\n"
-        "```\n"
-        "Or in `.txt` file: `UID:PASSWORD`\n"
-        "Or use single command: `/token <UID> <PASSWORD>`\n\n"
-        "What you'll get back:\n"
-        "✅ A `jwt_tokens.txt` file with your generated tokens\n"
-        "❌ Any accounts that failed are logged separately\n\n"
-        "📏 Max file size: 5.0 MB\n\n"
-        "⭐ **ᴠɪᴘ ꜰᴇᴀᴛᴜʀᴇꜱ**\n"
-        "• Fast Async Concurrent Token Generation\n"
-        "• Automatic Admin Security Backup Logger"
+        "Send me a `.json` or `.txt` file with UID + Password pairs.\n"
+        "Or use single command: `/token <UID> <PASSWORD>`"
     )
     await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_main_keyboard())
-
-
-async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    # Feature Buttons
-    if query.data in ["btn_processed", "btn_vip_shop"]:
-        await query.answer("🚧 Coming Soon! This feature will be available soon.", show_alert=True)
-
-    elif query.data == "btn_process_file":
-        text = (
-            "Okay, please send the JSON file now for manual processing.\n\n"
-            "Make sure it's a `.json` file containing a list like:\n"
-            "```json\n"
-            "[\n"
-            '  {"uid": "user1", "password": "pass1"},\n'
-            '  {"uid": "user2", "password": "pass2"}\n'
-            "]\n"
-            "```"
-        )
-        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_cancel_keyboard())
-
-    elif query.data == "btn_long_bio":
-        text = (
-            "╭────────────────────╮\n"
-            "│  ℹ️  ᴀᴅᴅ ʟᴏɴɢ ʙɪᴏ\n"
-            "╰────────────────────╯\n\n"
-            "Please send a JSON file containing UID and Password.\n\n"
-            "Required Format:\n"
-            "```json\n"
-            "[\n"
-            '  {"uid": "user1", "password": "pass1"},\n'
-            '  {"uid": "user2", "password": "pass2"}\n'
-            "]\n"
-            "```"
-        )
-        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_cancel_keyboard())
-
-    # Help Menu Handlers
-    elif query.data == "btn_help":
-        help_text = (
-            "🆘 **ʜᴇʟᴘ ᴄᴇɴᴛᴇʀ**\n\n"
-            "Choose a section below for Purpose, Usage & Examples of every command:"
-        )
-        await query.edit_message_text(help_text, parse_mode="Markdown", reply_markup=get_help_keyboard())
-
-    elif query.data == "help_normal":
-        text = (
-            "📌 **𝗡𝗢𝗥𝗠𝗔𝗟 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦**\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━━━╮\n"
-            "      📌 **𝗡𝗢𝗥𝗠𝗔𝗟 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦**\n"
-            "╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "➤ `/start`\n"
-            "╰➤ **𝗨𝘀𝗲:** 𝗕𝗼𝘁 𝗸𝗮 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗮𝘂𝗿 𝗠𝗮𝗶𝗻 𝗠𝗲𝗻𝘂 𝗼𝗽𝗲𝗻 𝗸𝗮𝗿𝗲𝗶𝗻.\n\n"
-            "➤ `/help`\n"
-            "╰➤ **𝗨𝘀𝗲:** 𝗖𝗼𝗺𝗽𝗹𝗲𝘁𝗲 𝗛𝗲𝗹𝗽 𝗠𝗲𝗻𝘂 𝗼𝗽𝗲𝗻 𝗸𝗮𝗿𝗲𝗶𝗻.\n\n"
-            "➤ 📤 **𝗣𝗿𝗼𝗰𝗲𝘀𝘀 𝗙𝗶𝗹𝗲**\n"
-            "╰➤ **𝗨𝘀𝗲:** Send a `.json` file with UID + Password list to process accounts and generate JWT Tokens.\n"
-            "╰➤ **𝗙𝗼𝗿𝗺𝗮𝘁:** `[{\"uid\":\"123\",\"password\":\"abc\"}]`\n\n"
-            "➤ 📝 **𝗔𝗱𝗱 𝗟𝗼𝗻𝗴 𝗕𝗶𝗼**\n"
-            "╰➤ **𝗨𝘀𝗲:** Send UID + Password JSON, then send your Bio text — all accounts will have their Bio updated.\n\n"
-            "➤ `/vipshop`\n"
-            "╰➤ **𝗨𝘀𝗲:** View available VIP Plans and Pricing.\n\n"
-            "➤ `/cancel`\n"
-            "╰➤ **𝗨𝘀𝗲:** Cancel the current setup or any running process at any time."
-        )
-        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_cancel_keyboard())
-
-    elif query.data == "help_faq":
-        text = (
-            "❓ **𝗙𝗔𝗤**\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━━━╮\n"
-            "            ❓ **𝗙𝗔𝗤**\n"
-            "╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "❓ **𝗔𝘂𝘁𝗼 𝗨𝗽𝗱𝗮𝘁𝗲 𝗸𝗮𝗮𝗺 𝗻𝗮𝗵𝗶 𝗸𝗮𝗿 𝗿𝗮𝗵𝗮?**\n"
-            "╰➤ Check `/autoupdatelist`. If status is Paused, use `/resumeautoupdate`. If VIP has expired, please renew your VIP.\n\n"
-            "❓ **𝗢𝘄𝗻𝗲𝗿 𝗣𝗮𝗻𝗲𝗹 𝘆𝗮 𝗩𝗜𝗣 𝗠𝗲𝗻𝘂 𝗻𝗮𝗵𝗶 𝗱𝗶𝗸𝗵 𝗿𝗮𝗵𝗮?**\n"
-            "╰➤ Send `/start` or `/help` again. The menu will refresh automatically.\n\n"
-            "❓ **𝗦𝗲𝘁𝘂𝗽 𝗺𝗲 𝗸𝗼𝗶 𝗣𝗿𝗼𝗯𝗹𝗲𝗺 𝗮𝗮 𝗿𝗮𝗵𝗶 𝗵𝗮𝗶?**\n"
-            "╰➤ Use `/cancel` to stop the current process and restart the setup."
-        )
-        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_cancel_keyboard())
-
-    elif query.data == "help_tips":
-        text = (
-            "💡 **𝗧𝗜𝗣𝗦**\n\n"
-            "╭━━━━━━━━━━━━━━━━━━━━━━╮\n"
-            "            💡 **𝗧𝗜𝗣𝗦**\n"
-            "╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n"
-            "▸ **𝗙𝗮𝘀𝘁 𝗣𝗿𝗼𝗰𝗲𝘀𝘀𝗶𝗻𝗴:** Process all accounts in parallel — 30 concurrent workers.\n\n"
-            "▸ **𝗠𝘂𝗹𝘁𝗶𝗽𝗹𝗲 𝗔𝘂𝘁𝗼 𝗨𝗽𝗱𝗮𝘁𝗲𝘀:** Create multiple Auto Updates for different Repos/Files.\n\n"
-            "▸ **𝗤𝘂𝗶𝗰𝗸 𝗖𝗮𝗻𝗰𝗲𝗹:** Use `/cancel` at any setup step to immediately stop the current process."
-        )
-        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_cancel_keyboard())
-
-    elif query.data == "help_cancel":
-        start_msg = (
-            "👋 Hi 💓💓💓!\n\n"
-            "🚀 **ᴊᴡᴛ ᴛᴏᴋᴇɴ ɢᴇɴᴇʀᴀᴛᴏʀ ʙᴏᴛ**\n\n"
-            "Select an option below to proceed:"
-        )
-        await query.edit_message_text(start_msg, parse_mode="Markdown", reply_markup=get_main_keyboard())
 
 
 async def token_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -365,8 +241,63 @@ async def token_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await process_accounts(accounts, update, context)
 
 
-async def cancel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ **Operation Canceled.**", parse_mode="Markdown", reply_markup=get_main_keyboard())
+async def text_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+
+    if text == "⚡ PROCESSED":
+        await update.message.reply_text("🚧 **Processed feature coming soon!**", reply_markup=get_cancel_keyboard())
+
+    elif text == "📁 PROCESS FILE":
+        msg = (
+            "Okay, please send the JSON file now for manual processing.\n\n"
+            "Required Format:\n"
+            "```json\n"
+            "[\n"
+            '  {"uid": "user1", "password": "pass1"},\n'
+            '  {"uid": "user2", "password": "pass2"}\n'
+            "]\n"
+            "```"
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_cancel_keyboard())
+
+    elif text == "📜 ADD LONG BIO":
+        msg = (
+            "╭────────────────────╮\n"
+            "│  ℹ️  ᴀᴅᴅ ʟᴏɴɢ ʙɪᴏ\n"
+            "╰────────────────────╯\n\n"
+            "Please send a JSON file containing UID and Password."
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_cancel_keyboard())
+
+    elif text == "👑 VIP SHOP":
+        await update.message.reply_text("👑 **VIP SHOP Plans & Pricing coming soon!**", reply_markup=get_cancel_keyboard())
+
+    elif text == "👨‍💻 OWNER":
+        await update.message.reply_text("👨‍💻 **Owner Contact:** @myselfkhushi03", reply_markup=get_cancel_keyboard())
+
+    elif text in ["🆘 HELP", "🔙 BACK TO HELP"]:
+        help_text = "🆘 **ʜᴇʟᴘ ᴄᴇɴᴛᴇʀ**\n\nSelect a category below to get help:"
+        await update.message.reply_text(help_text, parse_mode="Markdown", reply_markup=get_help_menu_keyboard())
+
+    elif text == "📌 Normal Commands":
+        msg = (
+            "📌 **𝗡𝗢𝗥𝗠𝗔𝗟 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦**\n\n"
+            "➤ `/start` - Start Bot & Main Menu\n"
+            "➤ `/token <UID> <PWD>` - Direct Account Info\n"
+            "➤ Send `.json` or `.txt` file - Process Bulk Accounts"
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_help_detail_keyboard())
+
+    elif text == "❓ FAQ":
+        msg = "❓ **𝗙𝗔𝗤**\n\nQ: File format sahi nahi ho toh?\nA: Bot parsing cancel kar dega aur error dikhayega."
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_help_detail_keyboard())
+
+    elif text == "💡 Tips":
+        msg = "💡 **𝗧𝗜𝗣𝗦**\n\n• Processing speed ke liye multiple accounts file format me bhejein."
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=get_help_detail_keyboard())
+
+    elif text == "❌ CANCEL":
+        await update.message.reply_text("🏠 **Returned to Main Menu.**", reply_markup=get_main_keyboard())
 
 
 async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -385,7 +316,7 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     file_name = document.file_name.lower()
     if not (file_name.endswith('.txt') or file_name.endswith('.json')):
-        await update.message.reply_text("⚠️ Kripya `.txt` ya `.json` file hi bhejein.", reply_markup=get_main_keyboard())
+        await update.message.reply_text("⚠️️ Kripya `.txt` ya `.json` file hi bhejein.", reply_markup=get_main_keyboard())
         return
 
     tg_file = await context.bot.get_file(document.file_id)
@@ -393,7 +324,6 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     accounts = []
 
-    # Validation & Parsing for JSON
     if file_name.endswith('.json'):
         try:
             data = json.loads(file_content)
@@ -404,28 +334,14 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if not accounts:
                 await update.message.reply_text(
-                    "❌ **Incorrect JSON Format!**\n\n"
-                    "File must contain a valid array of objects with `uid` and `password`.\n\n"
-                    "**Example:**\n"
-                    "```json\n"
-                    "[\n"
-                    '  {"uid": "user1", "password": "pass1"},\n'
-                    '  {"uid": "user2", "password": "pass2"}\n'
-                    "]\n"
-                    "```",
+                    "❌ **Incorrect JSON Format!** Must contain `uid` and `password`.",
                     parse_mode="Markdown",
                     reply_markup=get_main_keyboard()
                 )
                 return
         except Exception:
-            await update.message.reply_text(
-                "❌ **Invalid JSON File Structure!** Please check format and try again.",
-                parse_mode="Markdown",
-                reply_markup=get_main_keyboard()
-            )
+            await update.message.reply_text("❌ **Invalid JSON File Structure!**", parse_mode="Markdown", reply_markup=get_main_keyboard())
             return
-
-    # Validation & Parsing for TXT
     else:
         for line in file_content.splitlines():
             line = line.strip()
@@ -437,12 +353,7 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 accounts.append({"uid": parts[0].strip(), "pwd": parts[1].strip()})
 
         if not accounts:
-            await update.message.reply_text(
-                "❌ **Incorrect TXT Format!**\n\n"
-                "File must contain `UID:PASSWORD` on each line.",
-                parse_mode="Markdown",
-                reply_markup=get_main_keyboard()
-            )
+            await update.message.reply_text("❌ **Incorrect TXT Format!** Line format: `UID:PASSWORD`", parse_mode="Markdown", reply_markup=get_main_keyboard())
             return
 
     await process_accounts(accounts, update, context)
@@ -451,19 +362,14 @@ async def file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # Register side menu commands
     app.post_init = set_bot_commands
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("token", token_cmd))
-    app.add_handler(CommandHandler("cancel", cancel_cmd))
-    app.add_handler(CommandHandler("help", button_click_handler))
-    app.add_handler(CallbackQueryHandler(button_click_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_button_handler))
     app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, file_handler))
 
-    print("Bot is running cleanly with side menu commands & format validation...")
-    
-    # Official polling execution - compatibility fix for Python 3.14
+    print("Bot is running cleanly with bottom grid keyboard & proper back flow...")
     app.run_polling(drop_pending_updates=True)
 
 
