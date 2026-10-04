@@ -8,7 +8,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = 8536757095 # 👈 YAHAN APNI TELEGRAM ID DAAL DE
-API_URL = "https://sagarffxtoken.freesrv.com/generate?uid={uid}&password={password}"
+API_URL = "https://vipjwt.ffbot.site/token?uid={yourguestuid}&password={yourguestpassword}"
 
 flask_app = Flask(__name__)
 @flask_app.route('/')
