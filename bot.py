@@ -3,6 +3,7 @@ import json
 import time
 import logging
 import asyncio
+import requests
 from datetime import datetime
 from flask import Flask, request
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
@@ -22,18 +23,21 @@ logger = logging.getLogger(__name__)
 
 # Environment variables
 TOKEN = os.getenv("BOT_TOKEN")
+# Render automatically provides PORT, fallback to 8080 locally
 PORT = int(os.environ.get("PORT", 8080))
+# Render app URL environment variable (e.g., https://your-app-name.onrender.com)
+RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
 
 if not TOKEN:
     raise ValueError("BOT_TOKEN environment variable is missing!")
 
-# Flask App for Webhook / Server hosting (Render compatible)
+# Flask App for Webhook / Server hosting
 app = Flask(__name__)
 
 # Global tracking for monthly active users
 monthly_users = set()
 
-# Professional Main Menu Keyboard
+# Professional Main Menu Keyboard with cute vibe
 def get_main_menu():
     keyboard = [
         [KeyboardButton("📊 Status"), KeyboardButton("🆘 Help")],
@@ -41,20 +45,19 @@ def get_main_menu():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# Smart File & Content Type Detector
+# Smart File & Content Type Detector (Handles JSON, Code, UID:Pass credentials safely)
 def smart_detect_and_parse(text):
     cleaned_text = text.strip()
     
-    # 1. Check if it's valid JSON (or looks like credentials / uid pass json structure)
+    # 1. Check if it's valid JSON or credentials dictionary structure
     try:
         parsed_json = json.loads(cleaned_text)
-        # If it's a valid JSON object or list, format it cleanly and save as .json
         formatted_json = json.dumps(parsed_json, indent=4, ensure_ascii=False)
         return formatted_json, "accounts_data.json", "JSON / Credentials Data"
     except json.JSONDecodeError:
-        pass  # Not strict JSON, move to other checks
+        pass  
 
-    # 2. Check for HTML content
+    # 2. Check for HTML code
     text_lower = cleaned_text.lower()
     if "<html" in text_lower or "<body" in text_lower or "<!doctype html>" in text_lower or ("<" in text_lower and ">" in text_lower and "/>" in text_lower):
         return cleaned_text, "index.html", "HTML Code"
@@ -71,9 +74,8 @@ def smart_detect_and_parse(text):
     elif "{" in cleaned_text and ("margin:" in cleaned_text or "padding:" in cleaned_text or "color:" in cleaned_text or "background:" in cleaned_text):
         return cleaned_text, "style.css", "CSS Stylesheet"
 
-    # 6. Fallback for raw text, unstructured uid:pass, or custom logs
+    # 6. Fallback for raw text, unstructured uid:pass logs, etc.
     else:
-        # If it looks like credentials / text lines (e.g. uid:pass), save as .txt
         return cleaned_text, "data_output.txt", "Text / Credentials Log"
 
 # /start Command Handler
@@ -86,8 +88,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     welcome_text = (
         f"👥 **Monthly Active Users:** `{user_count}`\n\n"
-        f"🛡️ **Welcome to Professional File Generator Bot**\n"
-        f"Send any text, code, JSON, or `uid:pass` credentials. The bot will automatically detect the format and generate a professional downloadable file for you!\n\n"
+        f"🧸 **Welcome to Pixie File Bot ✨**\n"
+        f"Send any text, code, JSON, or `uid:pass` credentials. I will automatically detect the format and generate a clean downloadable file for you!\n\n"
         f"💡 *Tip:* Use `/make filename.ext` to specify a custom name.\n\n"
         f"⏱️ *Interaction Time:* `{current_time}`"
     )
@@ -102,7 +104,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_time = datetime.now().strftime("%I:%M %p")
     help_text = (
-        f"🆘 **Generator Help & Guide**\n\n"
+        f"🆘 **Pixie Help & Guide 🧸**\n\n"
         f"1. **Auto-Detection:** Paste anything directly (JSON, Code, Credentials). Bot reads and converts it instantly.\n"
         f"2. **Manual Naming:** Use `/make custom_name.json` followed by your data.\n"
         f"3. **Zero Errors:** Built-in exception handling ensures safe processing without silent failures.\n\n"
@@ -141,8 +143,6 @@ async def make_file_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     content = parts[1].replace(filename, "", 1).strip()
-    
-    # Manual file creation process with error guard
     await process_and_send(update, filename, content, detected_type="Manual Custom File")
 
 # Main Message Handler for Auto-Detection & Processing
@@ -169,7 +169,7 @@ async def handle_incoming_content(update: Update, context: ContextTypes.DEFAULT_
         await cancel_command(update, context)
         return
 
-    # Try-catch block to prevent any silent errors or crashes
+    # Error handling guard to prevent silent crashes
     try:
         processed_content, filename, detected_type = smart_detect_and_parse(text)
         await process_and_send(update, filename, processed_content, detected_type=detected_type)
@@ -194,7 +194,6 @@ async def process_and_send(update: Update, filename: str, content: str, detected
 
     start_time = time.time()
     
-    # Safe file writing
     file_path = f"temp_{filename}"
     try:
         with open(file_path, "w", encoding="utf-8") as f:
@@ -206,7 +205,6 @@ async def process_and_send(update: Update, filename: str, content: str, detected
         )
         return
 
-    # Calculate file size info
     file_size_bytes = os.path.getsize(file_path)
     file_size_str = f"{file_size_bytes} B"
     if file_size_bytes > 1024:
@@ -215,7 +213,6 @@ async def process_and_send(update: Update, filename: str, content: str, detected
     end_time = time.time()
     total_time_taken = round(end_time - start_time, 2)
 
-    # Professional Summary Caption
     caption = (
         f"🏁 **File Generation Complete!**\n\n"
         f"📂 **Filename:** `{filename}`\n"
@@ -228,7 +225,6 @@ async def process_and_send(update: Update, filename: str, content: str, detected
 
     await status_msg.edit_text(caption, parse_mode="Markdown")
 
-    # Send document securely
     try:
         with open(file_path, "rb") as doc_file:
             await update.message.reply_document(
@@ -238,11 +234,10 @@ async def process_and_send(update: Update, filename: str, content: str, detected
     except Exception as send_error:
         await update.message.reply_text(f"❌ Failed to send document: {str(send_error)}")
 
-    # Cleanup temporary local file
     if os.path.exists(file_path):
         os.remove(file_path)
 
-# Flask Webhook Setup for Render
+# Telegram Application & Webhook Setup
 application = Application.builder().token(TOKEN).build()
 
 application.add_handler(CommandHandler("start", start))
@@ -258,8 +253,20 @@ def webhook():
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Professional File Generator Bot is active and running!", 200
+    return "Pixie File Bot is active and running smoothly! ✨", 200
+
+# Automatic Webhook Setter function for Render
+def setup_telegram_webhook():
+    if RENDER_EXTERNAL_URL:
+        webhook_url = f"{RENDER_EXTERNAL_URL}/{TOKEN}"
+        api_url = f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={webhook_url}"
+        try:
+            resp = requests.get(api_url)
+            logger.info(f"Auto Webhook Setup Response: {resp.text}")
+        except Exception as e:
+            logger.error(f"Failed to auto-set webhook: {e}")
 
 if __name__ == "__main__":
     application.initialize()
+    setup_telegram_webhook()
     app.run(host="0.0.0.0", port=PORT)
