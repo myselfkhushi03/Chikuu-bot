@@ -16,7 +16,7 @@ from google.genai import types
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("maya-ai")
 
-MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 MAX_HISTORY_MESSAGES = 20  # last 10 exchanges per user
 
 SYSTEM_PROMPT = (
