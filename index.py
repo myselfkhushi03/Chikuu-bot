@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 from typing import Dict, List, Optional
 
@@ -16,7 +17,16 @@ from google.genai import types
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("maya-ai")
 
-MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
+# Models are tried in order. If one is busy (503) or limited (429), the next one is used.
+MODEL_CHAIN = [
+    m.strip()
+    for m in os.environ.get(
+        "GEMINI_MODELS",
+        "gemini-3.5-flash-lite,gemini-3.8-flash,gemini-3.6-flash,gemini-3.1-flash-lite",
+    ).split(",")
+    if m.strip()
+]
+MODEL_NAME = MODEL_CHAIN[0]
 MAX_HISTORY_MESSAGES = 20  # last 10 exchanges per user
 
 SYSTEM_PROMPT = (
@@ -83,18 +93,23 @@ def generate_reply(user_id: str, message: str) -> str:
 
     last_error: Optional[Exception] = None
     reply = ""
-    for attempt in range(2):  # one retry on transient failure
-        try:
-            response = client.models.generate_content(
-                model=MODEL_NAME,
-                contents=history,
-                config=config,
-            )
-            reply = (response.text or "").strip()
+    for round_no in range(2):  # go through the whole model list up to 2 times
+        for model in MODEL_CHAIN:
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=history,
+                    config=config,
+                )
+                reply = (response.text or "").strip()
+                last_error = None
+                break
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                log.warning("Model %s failed: %s", model, exc)
+        if reply or last_error is None:
             break
-        except Exception as exc:  # noqa: BLE001
-            last_error = exc
-            log.warning("Gemini call failed (attempt %s): %s", attempt + 1, exc)
+        time.sleep(1.5)  # short pause before the second round
 
     if last_error is not None and not reply:
         # Roll back the unanswered user message so history stays consistent
@@ -142,7 +157,7 @@ def root():
         "success": True,
         "name": "Maya AI",
         "status": "running",
-        "model": MODEL_NAME,
+        "models": MODEL_CHAIN,
         "api_key_configured": bool(
             os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         ),
