@@ -192,6 +192,28 @@ def chat_post(body: ChatRequest):
         return JSONResponse(status_code=500, content={"success": False, "error": str(exc)})
 
 
+@app.get("/chat")
+def chat_get(
+    message: str = Query(..., description="User message"),
+    user_id: str = Query("default"),
+    gender: str = Query("boy"),
+    context: Optional[str] = Query(None),
+):
+    try:
+        res = generate_reply(user_id, message, gender, context, None)
+        return JSONResponse(
+            content={
+                "success": True,
+                "name": "Maya",
+                "reply": res["reply"],
+                "messages": res["reply_parts"],
+            }
+        )
+    except Exception as exc:
+        log.exception("chat failed")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(exc)})
+
+
 @app.get("/reset")
 def reset(user_id: str = Query("default")):
     _histories.pop(user_id, None)
