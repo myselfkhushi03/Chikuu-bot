@@ -13,13 +13,19 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("maya-ai")
 
-# gemini-1.5-flash retire ho chuka hai, isliye hata diya
+# Latest pehle, phir purane. Agar koi model fail/retire ho to agla try hota hai.
+# NOTE: gemini-2.5-* aur 2.0-* retire ho chuke hain, isliye hata diye.
+DEFAULT_MODELS = (
+    "gemini-flash-latest,"      # hamesha latest Flash ko point karta hai
+    "gemini-3.8-flash,"
+    "gemini-3.6-flash,"
+    "gemini-3.5-flash,"
+    "gemini-3.5-flash-lite,"
+    "gemini-3.1-flash-lite"
+)
 MODEL_CHAIN = [
     m.strip()
-    for m in os.environ.get(
-        "GEMINI_MODELS",
-        "gemini-2.5-flash,gemini-2.0-flash",
-    ).split(",")
+    for m in os.environ.get("GEMINI_MODELS", DEFAULT_MODELS).split(",")
     if m.strip()
 ]
 MAX_HISTORY_MESSAGES = 20
@@ -120,17 +126,24 @@ def get_client() -> genai.Client:
     return _client
 
 
-def build_config(model: str, instruction: str) -> types.GenerateContentConfig:
-    kwargs = dict(
+def build_configs(instruction: str) -> List[types.GenerateContentConfig]:
+    """Pehle fast (minimal thinking) config, fail ho to plain config."""
+    base = dict(
         system_instruction=instruction,
         temperature=0.95,
-        max_output_tokens=200,
+        max_output_tokens=1024,  # thinking tokens bhi isi me ginte hain
     )
-    # gemini-2.5 me "thinking" tokens max_output_tokens se kat te hain,
-    # isse reply khali/cut aa sakta hai. Thinking band kar do (fast bhi hoga).
-    if model.startswith("gemini-2.5"):
-        kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-    return types.GenerateContentConfig(**kwargs)
+    configs: List[types.GenerateContentConfig] = []
+    try:
+        configs.append(
+            types.GenerateContentConfig(
+                **base, thinking_config=types.ThinkingConfig(thinking_level="minimal")
+            )
+        )
+    except Exception:
+        pass
+    configs.append(types.GenerateContentConfig(**base))
+    return configs
 
 
 def trim_history(history: List[types.Content]) -> List[types.Content]:
@@ -176,18 +189,22 @@ def generate_reply(
     history = trim_history(history)
 
     reply = ""
-    for model in (MODEL_CHAIN if client else []):
-        try:
-            response = client.models.generate_content(
-                model=model,
-                contents=history,
-                config=build_config(model, dynamic_instruction),
-            )
-            reply = (response.text or "").strip()
+    if client:
+        configs = build_configs(dynamic_instruction)
+        for model in MODEL_CHAIN:
+            for config in configs:
+                try:
+                    response = client.models.generate_content(
+                        model=model, contents=history, config=config
+                    )
+                    reply = (response.text or "").strip()
+                    if reply:
+                        log.info("Reply from model: %s", model)
+                        break
+                except Exception as exc:
+                    log.warning("Model %s failed: %s", model, exc)
             if reply:
                 break
-        except Exception as exc:
-            log.warning("Model %s failed: %s", model, exc)
 
     failed = not reply
     if failed:
