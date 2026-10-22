@@ -2,7 +2,7 @@ import logging
 import os
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from google import genai
@@ -12,11 +12,12 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("maya-ai")
 
+# gemini-1.5-flash retire ho chuka hai, isliye hata diya
 MODEL_CHAIN = [
     m.strip()
     for m in os.environ.get(
         "GEMINI_MODELS",
-        "gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash",
+        "gemini-2.5-flash,gemini-2.0-flash",
     ).split(",")
     if m.strip()
 ]
@@ -47,7 +48,7 @@ SYSTEM_PROMPT = (
 
 FALLBACK_REPLY = "Arey suno na 🌚||net issue tha, kahan the tab se? 👀"
 
-app = FastAPI(title="Maya AI - Fast Flirty Engine", version="4.5.0")
+app = FastAPI(title="Maya AI - Fast Flirty Engine", version="4.6.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -79,6 +80,28 @@ def get_client() -> genai.Client:
     return _client
 
 
+def build_config(model: str, instruction: str) -> types.GenerateContentConfig:
+    kwargs = dict(
+        system_instruction=instruction,
+        temperature=0.95,
+        max_output_tokens=200,
+    )
+    # gemini-2.5 me "thinking" tokens max_output_tokens se kat te hain,
+    # isse reply khali/cut aa sakta hai. Thinking band kar do (fast bhi hoga).
+    if model.startswith("gemini-2.5"):
+        kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+    return types.GenerateContentConfig(**kwargs)
+
+
+def trim_history(history: List[types.Content]) -> List[types.Content]:
+    if len(history) > MAX_HISTORY_MESSAGES:
+        history = history[-MAX_HISTORY_MESSAGES:]
+    # history hamesha "user" message se start honi chahiye
+    while history and history[0].role != "user":
+        history = history[1:]
+    return history
+
+
 def generate_reply(
     user_id: str,
     message: str,
@@ -88,10 +111,13 @@ def generate_reply(
 ) -> dict:
     client = get_client()
 
-    dynamic_instruction = f"{SYSTEM_PROMPT}"
+    dynamic_instruction = SYSTEM_PROMPT
+    if gender:
+        dynamic_instruction += f"\n\n**USER GENDER:** {gender}"
     if extra_context:
         dynamic_instruction += f"\n\n**CONTEXT:**\n{extra_context}"
 
+    # History: client ki di hui ho to wo, warna server memory se
     history: List[types.Content] = []
     if client_history and isinstance(client_history, list):
         for h in client_history:
@@ -99,48 +125,52 @@ def generate_reply(
             text_content = h.get("text") or h.get("content") or ""
             if text_content:
                 history.append(types.Content(role=role, parts=[types.Part(text=text_content)]))
-
     if not history:
-        history = _histories.setdefault(user_id, [])
+        history = list(_histories.get(user_id, []))
 
     history.append(types.Content(role="user", parts=[types.Part(text=message)]))
-
-    config = types.GenerateContentConfig(
-        system_instruction=dynamic_instruction,
-        temperature=0.95,
-        max_output_tokens=120,
-    )
+    history = trim_history(history)
 
     reply = ""
     for model in MODEL_CHAIN:
         try:
             response = client.models.generate_content(
-                model=model, contents=history, config=config
+                model=model,
+                contents=history,
+                config=build_config(model, dynamic_instruction),
             )
             reply = (response.text or "").strip()
             if reply:
                 break
         except Exception as exc:
-            log.warning("Model failed: %s", exc)
+            log.warning("Model %s failed: %s", model, exc)
 
-    if not reply:
+    failed = not reply
+    if failed:
         reply = FALLBACK_REPLY
 
-    # Remove 🥺 emoji if model produces it
     reply = reply.replace("🥺", "🌚")
 
-    history.append(types.Content(role="model", parts=[types.Part(text=reply)]))
+    # Fallback reply ko history me save nahi karte
+    if not failed:
+        history.append(types.Content(role="model", parts=[types.Part(text=reply)]))
+        _histories[user_id] = trim_history(history)
 
-    if len(history) > MAX_HISTORY_MESSAGES:
-        del history[: len(history) - MAX_HISTORY_MESSAGES]
-
-    _histories[user_id] = history
     reply_parts = [p.strip() for p in reply.split("||") if p.strip()]
-
     return {
         "reply": reply,
-        "reply_parts": reply_parts if len(reply_parts) > 1 else [reply],
+        "reply_parts": reply_parts if reply_parts else [reply],
     }
+
+
+@app.get("/")
+def root():
+    return {"status": "ok", "name": "Maya", "version": app.version}
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
 
 
 @app.post("/chat")
@@ -158,6 +188,7 @@ def chat_post(body: ChatRequest):
             }
         )
     except Exception as exc:
+        log.exception("chat failed")
         return JSONResponse(status_code=500, content={"success": False, "error": str(exc)})
 
 
@@ -169,4 +200,6 @@ def reset(user_id: str = Query("default")):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+    
